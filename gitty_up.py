@@ -16,9 +16,11 @@ def copy_to_clipboard(bytes_data):
 
 
 def git_stuff(repo: str):
+    """Obtains the changes between two branches"""
 
     repo = Repo(repo)
 
+    # Get the main branch
     main_branch_name = input(
         "Please Select the branch you want to merge into (default: main):"
         f"\n{NL.join([f'    - {x}' for x in repo.heads])}\n"
@@ -27,6 +29,7 @@ def git_stuff(repo: str):
         main_branch_name = "main"
     main_branch = [x for x in repo.heads if str(x) == main_branch_name][0]
 
+    # Get the PR branch
     pr_branch_name = input(
         "Please Select the branch you want to create the PR from "
         f"(default: {repo.active_branch}):\n"
@@ -38,7 +41,7 @@ def git_stuff(repo: str):
     else:
         pr_branch = [x for x in repo.heads if str(x) == pr_branch_name][0]
 
-
+    # Get the differences
     diff = main_branch.commit.diff(pr_branch.commit, create_patch=True)
     list_changes = [item.diff.decode("utf-8") for item in diff]
     print(
@@ -66,11 +69,12 @@ def summarize(content: str, client: AzureOpenAI):
 
 
 def main():
+    """Main function of the Generator"""
     print(
         "Welcome to Gitty Up (Cara's idea not mine), a helpful tool to generate PR "
         "Comments for your changes."
     )
-    repo = input("\nPlease enter the path to your Git Repo:")
+    repo = input("\nPlease enter the path to your Git Repo: ")
 
     client = AzureOpenAI(
         azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT"),
@@ -89,7 +93,7 @@ def main():
     ]
     full_list_o_change_summeries = "\n".join(change_summaries)
     overall_summary = summarize(
-        "Please summarize this list and make the list very concise: "
+        "Please summarize this list into a concise single sentence summary: "
         f"{full_list_o_change_summeries}",
         client=client
     )
@@ -97,10 +101,10 @@ def main():
     # CODE HERE FOR GENERATING IMAGE
     cute_image_binary = b''
 
-    print("\nFull list of changes:")
-    print(full_list_o_change_summeries)
     print("\nShort Summary of changes:")
     print(overall_summary)
+    print("\nFull list of changes:")
+    print(full_list_o_change_summeries)
     print("\nCute Binary:")
     print(cute_image_binary)
 
@@ -109,7 +113,7 @@ def main():
     clipboard_array.append("".encode("utf-8"))
     clipboard_array.append("## Descriptions of Changes".encode("utf-8"))
     clipboard_array.append(
-        "\n".join([f"  * {x}" for x in change_summaries]).encode("utf-8")
+        "\n".join(change_summaries).encode("utf-8")
     )
     clipboard_array.append("".encode("utf-8"))
     clipboard_array.append("## CUTE".encode("utf-8"))
@@ -118,6 +122,6 @@ def main():
     # Put into clipboard
     copy_to_clipboard(NL.encode("utf-8").join(clipboard_array))
 
-    print("Your Change Summary and Image has been placed in your clipboard.")
+    print("\n\nYour Change Summary and Image has been placed in your clipboard.")
 
 main()
