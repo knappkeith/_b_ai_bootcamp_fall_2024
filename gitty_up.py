@@ -1,24 +1,30 @@
-import os
-from pyjpgclipboard import clipboard_load_jpg
-from random import choice
-import subprocess
+"""List of improvements:
+- TODO: pass in repo location
+- TODO: repo tab complete
+"""
 import json
-import requests
+import os
+import subprocess
+from random import choice
+from textwrap import indent
+from time import time
+from typing import Tuple, List, Union
 
+import requests
 from git import Repo
 from openai import AzureOpenAI
+from pyjpgclipboard import clipboard_load_jpg
 
 NL = "\n"
 
 
-def copy_to_clipboard(bytes_data):
+def copy_to_clipboard(bytes_data: bytes) -> None:
     """Copy the given bytes to the clipboard."""
     process = subprocess.Popen('pbcopy', stdin=subprocess.PIPE)
     process.communicate(bytes_data)
     process.wait()
 
-
-def git_stuff(repo: str):
+def git_stuff(repo: str) -> Tuple[List[str], str, str]:
     """Obtains the changes between two branches"""
 
     repo = Repo(repo)
@@ -51,10 +57,9 @@ def git_stuff(repo: str):
         f"You have selected {pr_branch_name} --> {main_branch_name}, there are a "
         f"total of {len(list_changes)} changes."
     )
-    return list_changes
+    return list_changes, str(main_branch), str(pr_branch_name)
 
-
-def summarize(content: str, client: AzureOpenAI):
+def summarize(content: str, client: AzureOpenAI) -> str:
     """Uses openAI to summarize"""
     conversation = [
         {
@@ -70,34 +75,72 @@ def summarize(content: str, client: AzureOpenAI):
     output_msg = response_msg.message.content
     return output_msg
 
-def analyze_mood(text: str, client: AzureOpenAI):
+def analyze_mood(text: str, client: AzureOpenAI) -> str:
     # Create a prompt to determine the mood of the input text
-    prompt = f"Determine the mood of the following text:\n\n{text}\n\nPlease provide the mood in one or two words, such as 'happy', 'sad', 'angry', 'hopeful', etc."
+    prompt = (
+        f"Determine the mood of the following text:\n\n{text}\n\nPlease provide the "
+        "mood in one or two words, such as 'happy', 'sad', 'angry', 'hopeful', etc."
+    )
 
     try:
         # Use GPT-4 to generate the mood
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an assistant that analyzes the mood of text."},
+                {
+                    "role": "system",
+                    "content": "You are an assistant that analyzes the mood of text."
+                },
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=10  # Limit tokens to keep the response concise
+            max_tokens=20  # Limit tokens to keep the response concise
         )
 
         # Extract the response
         mood = response.choices[0].message.content
-        print("Mood of the text:", mood)
 
         return mood
 
     except Exception as e:
         print("Error analyzing mood:", e)
         return None
-    
-def generate_image(overall_summary: str, context: str, client: AzureOpenAI):
+
+def write_content_to_file(
+    dir_name: str,
+    file_name_template: str,
+    content: Union[str, bytes]
+) -> str:
+
+    # Set the directory for the stored image
+    dir = os.path.join(os.curdir, dir_name)
+
+    # If the directory doesn't exist, create it
+    if not os.path.isdir(dir):
+        os.mkdir(dir)
+
+    # Initialize the image path (note the filetype should be png)
+    file_path = os.path.join(
+        dir,
+        file_name_template.format(ts=str(time()).replace(".", ""))
+    )
+    file_path = os.path.abspath(file_path)
+
+    if isinstance(content, bytes):
+        write_type = "wb"
+    elif isinstance(content, str):
+        write_type = "w"
+
+    with open(file_path, write_type) as f:
+        f.write(content)
+
+    return file_path
+
+def generate_image(overall_summary: str, context: str, client: AzureOpenAI) -> str:
     # Concatenate summary and context to form a detailed prompt
-    prompt = f"{overall_summary} Context: {context}"
+    prompt = (
+        f"There are the following changes to a code base: {overall_summary}. "
+        f"Please generate an image of a {context}"
+    )
 
     try:
         # Use the DALL-E model (or other suitable Azure OpenAI image model)
@@ -109,58 +152,51 @@ def generate_image(overall_summary: str, context: str, client: AzureOpenAI):
 
         json_response = json.loads(result.model_dump_json())
 
-        # Set the directory for the stored image
-        image_dir = os.path.join(os.curdir, 'images')
-
-        # If the directory doesn't exist, create it
-        if not os.path.isdir(image_dir):
-            os.mkdir(image_dir)
-
-        # Initialize the image path (note the filetype should be png)
-        image_path = os.path.join(image_dir, 'generated_image.png')
-
         # Retrieve the generated image
         image_url = json_response["data"][0]["url"]  # extract image URL from response
         generated_image = requests.get(image_url).content  # download the image
 
-        with open(image_path, "wb") as image_file:
-            image_file.write(generated_image)
+        image_path = write_content_to_file(
+            "images",
+            "generated_image_{ts}.png",
+            generated_image
+        )
 
-        return os.path.abspath(image_path)
+        return image_path
 
     except Exception as e:
         print("Error generating image:", e)
         return None
 
-
-def main():
+def main() -> None:
     """Main function of the Generator"""
     print(
-        "Welcome to Gitty Up (Cara's idea not mine), a helpful tool to generate PR "
-        "Comments for your changes."
+        "\n\nWelcome to Gitty Up (Cara's idea not mine), a helpful tool to generate PR "
+        "Comments for your changes.\n"
     )
-    repo = input("\nPlease enter the path to your Git Repo: ")
-
+    results = {}
     client = AzureOpenAI(
         azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT"),
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
         api_version="2024-02-01"
     )
-    git_changes = git_stuff(repo=repo)
 
-    generate_opinion = [
-        summarize(
-            "You are charged with keeping a codebase well maintained.  "
-            "You are an expert in finding bugs in code."
-            "Based on the changes in the following list, give your "
-            f"summary opinion:  {x}",
-            client=client
-        ) for x in git_changes
-    ]
-    formatted_opinion = "\n".join(generate_opinion)
+    ####################################################################################
+    # Get git info and changes
+    ####################################################################################
+    print(f"{'#':#^84}")
+    print(f"#{'We need some information from you':^82}#")
+    print(f"{'#':#^84}")
+    repo = input("\nPlease enter the path to your Git Repo: ")
+    results['repo'] = repo
+    git_changes, destination_branch, source_branch = git_stuff(repo=repo)
+    results["destination_branch"] = destination_branch
+    results["source_branch"] = source_branch
+    results["git_changes"] = git_changes
 
-    mood = analyze_mood(formatted_opinion, client)
-
+    ####################################################################################
+    # Get Change Summaries
+    ####################################################################################
     change_summaries = [
         summarize(
             "You are a code examiner. Please summarize each of the changes in "
@@ -170,25 +206,90 @@ def main():
         )
     ]
     full_list_o_change_summeries = "\n".join(change_summaries)
+    results["full_summary"] = full_list_o_change_summeries
+
+    ####################################################################################
+    # Get Overall Summary of Changes
+    ####################################################################################
     overall_summary = summarize(
         "Please summarize this list into a concise single sentence summary: "
         f"{full_list_o_change_summeries}",
         client=client
     )
+    results["short_summary"] = overall_summary
 
-    # CODE HERE FOR GENERATING IMAGE
-    context = "cute" + mood
-    image_path = generate_image(overall_summary, context, client)
+    ####################################################################################
+    # Generate Opinion of Changes
+    ####################################################################################
+    generate_opinion = [
+        summarize(
+            "You are charged with keeping a codebase well maintained. "
+            "You are an expert in finding bugs in code. "
+            "You are an optimist. "
+            "Based on the changes in the following list, give your "
+            f"summary opinion:  {NL}{NL.join(git_changes)}  You should try your best.",
+            client=client
+        )
+    ]
+    formatted_opinion = "\n".join(generate_opinion)
+    results["opinion"] = formatted_opinion
 
-    print("\nShort Summary of changes:")
-    print(overall_summary)
-    print("\nFull list of changes:")
-    print(full_list_o_change_summeries)
-    print("\nBot's Opinion of changes:")
-    print(formatted_opinion)
-    print("\nCute Image Path:")
-    print(image_path)
+    ####################################################################################
+    # Get the mood of the Opinion
+    ####################################################################################
+    mood = analyze_mood(formatted_opinion, client)
+    results["mood"] = mood
 
+    ####################################################################################
+    # Generate the Image
+    ####################################################################################
+    image_types = {
+        "Cute Cuddly Animal from the mood": (
+            "Please generate a photorealistic image of a cat or other cute cuddly "
+            f"animal that is feeling {mood}."
+        ),
+        "Interpretive AI Day Dream from the Summary": (
+            f"There are the following changes to a code base: {overall_summary}. "
+            "Generate an Interpretive Day Dream image of these changes."
+        ),
+        "Combination of both": (
+            "Generate an image of a photorealistic cute cuddly animal that is feeling "
+            f"{mood} and making {overall_summary} to a code base."
+        )
+    }
+    image_selection = input(
+        "What type of image do you want to generate (select a #):"
+        f"\n{NL.join([f'   {i + 1} - {v}' for i, v in enumerate(image_types)])}\n"
+    )
+    image_context = image_types[list(image_types.keys())[int(image_selection) - 1]]
+    results["image_context"] = image_context
+
+    ####################################################################################
+    # Output everything
+    ####################################################################################
+    print(f"\n{'#':#^84}")
+    print(f"#{'START of OUTPUT':^82}#")
+    print(f"{'#':#^84}")
+    print("\n- Short Summary of changes:")
+    print(indent(overall_summary, "    "))
+    print("\n- Full list of changes:")
+    print(indent(full_list_o_change_summeries, "    "))
+    print("\n- Bot's Opinion of changes:")
+    print(indent(formatted_opinion, "    "))
+    print("\n- Mood of the changes:", f"    {mood}", sep=NL)
+    print("\n- Image Path:")
+
+    # Image actually generates here but that's only so we can multitask
+    image_path = generate_image(overall_summary, image_context, client)
+    results["image_path"] = image_path
+    print(f"    {image_path}\n")
+
+    ####################################################################################
+    # Generate clipboard data
+    ####################################################################################
+    print(f"{'#':#^84}")
+    print(f"#{'Lets fill out the PR':^82}#")
+    print(f"{'#':#^84}")
     clipboard_array = ["## Summary".encode("utf-8")]
     clipboard_array.append(overall_summary.encode("utf-8"))
     clipboard_array.append("".encode("utf-8"))
@@ -200,12 +301,29 @@ def main():
     clipboard_array.append("## CUTE".encode("utf-8"))
     clipboard_array.append("".encode("utf-8"))
     copy_to_clipboard(NL.encode("utf-8").join(clipboard_array))
-    print("\n\nYour Change Summary has been placed in your clipboard.")
+    print("\nYour Change Summary has been placed in your clipboard.")
 
-    input("Press Enter to get image into clipboard.")
+    # Pause for people to paste into PR
+    input("\nPress Enter to get image into clipboard.")
 
-    # Put into clipboard
+    # Put image into clipboard
     clipboard_load_jpg(image_path)
     print("Image copied to clipboard")
 
-main()
+    ####################################################################################
+    # Write results and finish it up
+    ####################################################################################
+    output_file_path = write_content_to_file(
+        "generation_output",
+        "pr_summary_output_{ts}.json",
+        json.dumps(results, indent=4)
+    )
+    print(
+        f"\nAll your output has been save to:\n    {output_file_path}"
+        "\n\nPlease come back and see us soon!\n"
+    )
+    print(f"{'#':#^84}")
+    print(f"#{'Goodbye!':^82}#")
+    print(f"{'#':#^84}")
+if __name__ == "__main__":
+    main()
