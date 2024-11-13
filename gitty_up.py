@@ -106,7 +106,10 @@ def analyze_mood(text: str, client: AzureOpenAI):
 
 def generate_image(overall_summary: str, context: str, client: AzureOpenAI):
     # Concatenate summary and context to form a detailed prompt
-    prompt = f"{overall_summary} Context: {context}"
+    prompt = (
+        f"There are the following changes to a code base: {overall_summary}. "
+        f"Please generate an image of a {context}"
+    )
 
     try:
         # Use the DALL-E model (or other suitable Azure OpenAI image model)
@@ -184,9 +187,25 @@ def main():
         f"{full_list_o_change_summeries}",
         client=client
     )
-
-    # CODE HERE FOR GENERATING IMAGE
-    context = f"cute cuddly animal that is feeling {mood}"
+    image_types = {
+        "Cute Cuddly Animal from the mood": (
+            "Please generate a photorealistic image of a cat or other cute cuddly "
+            f"animal that is feeling {mood}."
+        ),
+        "Interpretive AI Day Dream from the Summary": (
+            f"There are the following changes to a code base: {overall_summary}. "
+            "Generate an Interpretive Day Dream image of these changes."
+        ),
+        "Combination of both": (
+            "Generate an image of a photorealistic cute cuddly animal that is feeling "
+            f"{mood} and making {overall_summary} to a code base."
+        )
+    }
+    image_selection = input(
+        "What type of image do you want to generate (select a #):"
+        f"\n{NL.join([f'   {i + 1} - {v}' for i, v in enumerate(image_types)])}\n"
+    )
+    image_context = image_types[list(image_types.keys())[int(image_selection) - 1]]
 
     print("\nShort Summary of changes:")
     print(indent(overall_summary, "    "))
@@ -195,8 +214,10 @@ def main():
     print("\nBot's Opinion of changes:")
     print(indent(formatted_opinion, "    "))
     print("\nMood of the changes:", mood, sep=NL)
-    print("\nCute Image Path:")
-    image_path = generate_image(overall_summary, context, client)
+
+
+    print("\nImage Path:")
+    image_path = generate_image(overall_summary, image_context, client)
     print(image_path)
 
     clipboard_array = ["## Summary".encode("utf-8")]
