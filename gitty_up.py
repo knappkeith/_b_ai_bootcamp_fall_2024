@@ -171,8 +171,8 @@ def generate_image(overall_summary: str, context: str, client: AzureOpenAI) -> s
 def main() -> None:
     """Main function of the Generator"""
     print(
-        "Welcome to Gitty Up (Cara's idea not mine), a helpful tool to generate PR "
-        "Comments for your changes."
+        "\n\nWelcome to Gitty Up (Cara's idea not mine), a helpful tool to generate PR "
+        "Comments for your changes.\n"
     )
     results = {}
     client = AzureOpenAI(
@@ -184,6 +184,9 @@ def main() -> None:
     ####################################################################################
     # Get git info and changes
     ####################################################################################
+    print(f"{'#':#^84}")
+    print(f"#{'We need some information from you':^82}#")
+    print(f"{'#':#^84}")
     repo = input("\nPlease enter the path to your Git Repo: ")
     results['repo'] = repo
     git_changes, destination_branch, source_branch = git_stuff(repo=repo)
@@ -264,23 +267,29 @@ def main() -> None:
     ####################################################################################
     # Output everything
     ####################################################################################
-    print("\nShort Summary of changes:")
+    print(f"\n{'#':#^84}")
+    print(f"#{'START of OUTPUT':^82}#")
+    print(f"{'#':#^84}")
+    print("\n- Short Summary of changes:")
     print(indent(overall_summary, "    "))
-    print("\nFull list of changes:")
+    print("\n- Full list of changes:")
     print(indent(full_list_o_change_summeries, "    "))
-    print("\nBot's Opinion of changes:")
+    print("\n- Bot's Opinion of changes:")
     print(indent(formatted_opinion, "    "))
-    print("\nMood of the changes:", mood, sep=NL)
-    print("\nImage Path:")
+    print("\n- Mood of the changes:", f"    {mood}", sep=NL)
+    print("\n- Image Path:")
 
     # Image actually generates here but that's only so we can multitask
     image_path = generate_image(overall_summary, image_context, client)
     results["image_path"] = image_path
-    print(image_path)
+    print(f"    {image_path}\n")
 
     ####################################################################################
     # Generate clipboard data
     ####################################################################################
+    print(f"{'#':#^84}")
+    print(f"#{'Lets fill out the PR':^82}#")
+    print(f"{'#':#^84}")
     clipboard_array = ["## Summary".encode("utf-8")]
     clipboard_array.append(overall_summary.encode("utf-8"))
     clipboard_array.append("".encode("utf-8"))
@@ -292,10 +301,10 @@ def main() -> None:
     clipboard_array.append("## CUTE".encode("utf-8"))
     clipboard_array.append("".encode("utf-8"))
     copy_to_clipboard(NL.encode("utf-8").join(clipboard_array))
-    print("\n\nYour Change Summary has been placed in your clipboard.")
+    print("\nYour Change Summary has been placed in your clipboard.")
 
     # Pause for people to paste into PR
-    input("Press Enter to get image into clipboard.")
+    input("\nPress Enter to get image into clipboard.")
 
     # Put image into clipboard
     clipboard_load_jpg(image_path)
@@ -311,8 +320,10 @@ def main() -> None:
     )
     print(
         f"\nAll your output has been save to:\n    {output_file_path}"
-        "\n\nPlease come back and see us soon!"
+        "\n\nPlease come back and see us soon!\n"
     )
-
+    print(f"{'#':#^84}")
+    print(f"#{'Goodbye!':^82}#")
+    print(f"{'#':#^84}")
 if __name__ == "__main__":
     main()
