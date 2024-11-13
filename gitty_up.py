@@ -111,43 +111,30 @@ def generate_image(overall_summary: str, context: str, client: AzureOpenAI):
         print("Error generating image:", e)
         return None
 
-def generate_image(overall_summary: str, context: str, client: AzureOpenAI):
-    # Concatenate summary and context to form a detailed prompt
-    prompt = f"{overall_summary} Context: {context}"
+def analyze_mood(text: str, client: AzureOpenAI):
+    # Create a prompt to determine the mood of the input text
+    prompt = f"Determine the mood of the following text:\n\n{text}\n\nPlease provide the mood in one or two words, such as 'happy', 'sad', 'angry', 'hopeful', etc."
 
     try:
-        # Use the DALL-E model (or other suitable Azure OpenAI image model)
-        result = client.images.generate(
-            model="dall-e-3",
-            prompt=prompt,
-            n=1
+        # Use GPT-4 to generate the mood
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an assistant that analyzes the mood of text."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=10  # Limit tokens to keep the response concise
         )
 
-        json_response = json.loads(result.model_dump_json())
+        # Extract the response
+        mood = response.choices[0].message.content
+        print("Mood of the text:", mood)
 
-        # Set the directory for the stored image
-        image_dir = os.path.join(os.curdir, 'images')
-
-        # If the directory doesn't exist, create it
-        if not os.path.isdir(image_dir):
-            os.mkdir(image_dir)
-
-        # Initialize the image path (note the filetype should be png)
-        image_path = os.path.join(image_dir, 'generated_image.png')
-
-        # Retrieve the generated image
-        image_url = json_response["data"][0]["url"]  # extract image URL from response
-        generated_image = requests.get(image_url).content  # download the image
-
-        with open(image_path, "wb") as image_file:
-            image_file.write(generated_image)
-
-        return os.path.abspath(image_path)
+        return mood
 
     except Exception as e:
-        print("Error generating image:", e)
+        print("Error analyzing mood:", e)
         return None
-
 
 def main():
     """Main function of the Generator"""
@@ -168,12 +155,15 @@ def main():
     generate_opinion = [
         summarize(
             "You are charged with keeping a codebase well maintained.  "
+            "You are an expert in finding bugs in code."
             "Based on the changes in the following list, give your "
-            f"opinion:  {x}",
+            f"summary opinion:  {x}",
             client=client
         ) for x in git_changes
     ]
     formatted_opinion = "\n".join(generate_opinion)
+
+    mood = analyze_mood(formatted_opinion, client)
 
     change_summaries = [
         summarize(
@@ -191,7 +181,7 @@ def main():
     )
 
     # CODE HERE FOR GENERATING IMAGE
-    context = "cute and helpful"
+    context = "cute, cats" + mood
     image_url = generate_image(overall_summary, context, client)
 
     print("\nShort Summary of changes:")
@@ -212,7 +202,7 @@ def main():
     )
     clipboard_array.append("".encode("utf-8"))
     clipboard_array.append("## CUTE".encode("utf-8"))
-    clipboard_array.append(image_url)
+    clipboard_array.append(image_url.encode("utf-8"))
 
     # Put into clipboard
     copy_to_clipboard(NL.encode("utf-8").join(clipboard_array))
