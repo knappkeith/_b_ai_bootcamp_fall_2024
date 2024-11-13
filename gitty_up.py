@@ -1,12 +1,18 @@
-import os
-from pyjpgclipboard import clipboard_load_jpg
-from random import choice
-import subprocess
+"""List of improvements:
+- pass in repo location
+- repo tab complete
+- save image and generated text for history
+"""
 import json
-import requests
+import os
+import subprocess
+from random import choice
+from textwrap import indent
 
+import requests
 from git import Repo
 from openai import AzureOpenAI
+from pyjpgclipboard import clipboard_load_jpg
 
 NL = "\n"
 
@@ -16,7 +22,6 @@ def copy_to_clipboard(bytes_data):
     process = subprocess.Popen('pbcopy', stdin=subprocess.PIPE)
     process.communicate(bytes_data)
     process.wait()
-
 
 def git_stuff(repo: str):
     """Obtains the changes between two branches"""
@@ -53,7 +58,6 @@ def git_stuff(repo: str):
     )
     return list_changes
 
-
 def summarize(content: str, client: AzureOpenAI):
     """Uses openAI to summarize"""
     conversation = [
@@ -72,29 +76,34 @@ def summarize(content: str, client: AzureOpenAI):
 
 def analyze_mood(text: str, client: AzureOpenAI):
     # Create a prompt to determine the mood of the input text
-    prompt = f"Determine the mood of the following text:\n\n{text}\n\nPlease provide the mood in one or two words, such as 'happy', 'sad', 'angry', 'hopeful', etc."
+    prompt = (
+        f"Determine the mood of the following text:\n\n{text}\n\nPlease provide the "
+        "mood in one or two words, such as 'happy', 'sad', 'angry', 'hopeful', etc."
+    )
 
     try:
         # Use GPT-4 to generate the mood
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an assistant that analyzes the mood of text."},
+                {
+                    "role": "system",
+                    "content": "You are an assistant that analyzes the mood of text."
+                },
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=10  # Limit tokens to keep the response concise
+            max_tokens=20  # Limit tokens to keep the response concise
         )
 
         # Extract the response
         mood = response.choices[0].message.content
-        print("Mood of the text:", mood)
 
         return mood
 
     except Exception as e:
         print("Error analyzing mood:", e)
         return None
-    
+
 def generate_image(overall_summary: str, context: str, client: AzureOpenAI):
     # Concatenate summary and context to form a detailed prompt
     prompt = f"{overall_summary} Context: {context}"
@@ -132,7 +141,6 @@ def generate_image(overall_summary: str, context: str, client: AzureOpenAI):
         print("Error generating image:", e)
         return None
 
-
 def main():
     """Main function of the Generator"""
     print(
@@ -140,7 +148,7 @@ def main():
         "Comments for your changes."
     )
     repo = input("\nPlease enter the path to your Git Repo: ")
-
+    # repo = "/Users/keith/dev/ag_one/data-platform-integration-tests/"
     client = AzureOpenAI(
         azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT"),
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
@@ -150,12 +158,13 @@ def main():
 
     generate_opinion = [
         summarize(
-            "You are charged with keeping a codebase well maintained.  "
-            "You are an expert in finding bugs in code."
+            "You are charged with keeping a codebase well maintained. "
+            "You are an expert in finding bugs in code. "
+            "You are an optimist. "
             "Based on the changes in the following list, give your "
-            f"summary opinion:  {x}",
+            f"summary opinion:  {NL}{NL.join(git_changes)}  You should try your best.",
             client=client
-        ) for x in git_changes
+        )
     ]
     formatted_opinion = "\n".join(generate_opinion)
 
@@ -177,16 +186,17 @@ def main():
     )
 
     # CODE HERE FOR GENERATING IMAGE
-    context = "cute" + mood
-    image_path = generate_image(overall_summary, context, client)
+    context = f"cute cuddly animal that is feeling {mood}"
 
     print("\nShort Summary of changes:")
-    print(overall_summary)
+    print(indent(overall_summary, "    "))
     print("\nFull list of changes:")
-    print(full_list_o_change_summeries)
+    print(indent(full_list_o_change_summeries, "    "))
     print("\nBot's Opinion of changes:")
-    print(formatted_opinion)
+    print(indent(formatted_opinion, "    "))
+    print("\nMood of the changes:", mood, sep=NL)
     print("\nCute Image Path:")
+    image_path = generate_image(overall_summary, context, client)
     print(image_path)
 
     clipboard_array = ["## Summary".encode("utf-8")]
@@ -208,4 +218,5 @@ def main():
     clipboard_load_jpg(image_path)
     print("Image copied to clipboard")
 
-main()
+if __name__ == "__main__":
+    main()
