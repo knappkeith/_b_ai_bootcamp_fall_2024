@@ -83,13 +83,21 @@ def main():
     )
     git_changes = git_stuff(repo=repo)
 
+    # change_summaries = [
+    #     summarize(
+    #         "You are a code examiner. Please summarize each of the changes in "
+    #         "this list of changes and only include important changes and make "
+    #         f"the list of changes very concise:  {x}",
+    #         client=client
+    #     ) for x in git_changes
+    # ]
     change_summaries = [
         summarize(
             "You are a code examiner. Please summarize each of the changes in "
-            "this list of changes and only include important changes and make "
-            f"the list of changes very concise:  {x}",
+            "this list of changes and make "
+            f"the list of changes very concise:  {NL}{NL.join(git_changes)}",
             client=client
-        ) for x in git_changes
+        )
     ]
     full_list_o_change_summeries = "\n".join(change_summaries)
     overall_summary = summarize(
