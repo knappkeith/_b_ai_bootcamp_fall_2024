@@ -70,7 +70,31 @@ def summarize(content: str, client: AzureOpenAI):
     output_msg = response_msg.message.content
     return output_msg
 
+def analyze_mood(text: str, client: AzureOpenAI):
+    # Create a prompt to determine the mood of the input text
+    prompt = f"Determine the mood of the following text:\n\n{text}\n\nPlease provide the mood in one or two words, such as 'happy', 'sad', 'angry', 'hopeful', etc."
 
+    try:
+        # Use GPT-4 to generate the mood
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an assistant that analyzes the mood of text."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=10  # Limit tokens to keep the response concise
+        )
+
+        # Extract the response
+        mood = response.choices[0].message.content
+        print("Mood of the text:", mood)
+
+        return mood
+
+    except Exception as e:
+        print("Error analyzing mood:", e)
+        return None
+    
 def generate_image(overall_summary: str, context: str, client: AzureOpenAI):
     # Concatenate summary and context to form a detailed prompt
     prompt = f"{overall_summary} Context: {context}"
@@ -115,8 +139,7 @@ def main():
         "Welcome to Gitty Up (Cara's idea not mine), a helpful tool to generate PR "
         "Comments for your changes."
     )
-    # repo = input("\nPlease enter the path to your Git Repo: ")
-    repo = "/Users/keith/dev/ag_one/data-platform-integration-tests/"
+    repo = input("\nPlease enter the path to your Git Repo: ")
 
     client = AzureOpenAI(
         azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT"),
@@ -125,14 +148,19 @@ def main():
     )
     git_changes = git_stuff(repo=repo)
 
-    # change_summaries = [
-    #     summarize(
-    #         "You are a code examiner. Please summarize each of the changes in "
-    #         "this list of changes and only include important changes and make "
-    #         f"the list of changes very concise:  {x}",
-    #         client=client
-    #     ) for x in git_changes
-    # ]
+    generate_opinion = [
+        summarize(
+            "You are charged with keeping a codebase well maintained.  "
+            "You are an expert in finding bugs in code."
+            "Based on the changes in the following list, give your "
+            f"summary opinion:  {x}",
+            client=client
+        ) for x in git_changes
+    ]
+    formatted_opinion = "\n".join(generate_opinion)
+
+    mood = analyze_mood(formatted_opinion, client)
+
     change_summaries = [
         summarize(
             "You are a code examiner. Please summarize each of the changes in "
@@ -149,13 +177,15 @@ def main():
     )
 
     # CODE HERE FOR GENERATING IMAGE
-    context = "cute but angry"
+    context = "cute, cats" + mood
     image_path = generate_image(overall_summary, context, client)
 
     print("\nShort Summary of changes:")
     print(overall_summary)
     print("\nFull list of changes:")
     print(full_list_o_change_summeries)
+    print("\nBot's Opinion of changes:")
+    print(formatted_opinion)
     print("\nCute Image Path:")
     print(image_path)
 
