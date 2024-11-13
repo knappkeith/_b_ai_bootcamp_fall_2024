@@ -8,6 +8,8 @@ import os
 import subprocess
 from random import choice
 from textwrap import indent
+from time import time
+from typing import Tuple, List, Union
 
 import requests
 from git import Repo
@@ -17,13 +19,13 @@ from pyjpgclipboard import clipboard_load_jpg
 NL = "\n"
 
 
-def copy_to_clipboard(bytes_data):
+def copy_to_clipboard(bytes_data: bytes) -> None:
     """Copy the given bytes to the clipboard."""
     process = subprocess.Popen('pbcopy', stdin=subprocess.PIPE)
     process.communicate(bytes_data)
     process.wait()
 
-def git_stuff(repo: str):
+def git_stuff(repo: str) -> Tuple[List[str], str, str]:
     """Obtains the changes between two branches"""
 
     repo = Repo(repo)
@@ -56,9 +58,9 @@ def git_stuff(repo: str):
         f"You have selected {pr_branch_name} --> {main_branch_name}, there are a "
         f"total of {len(list_changes)} changes."
     )
-    return list_changes
+    return list_changes, str(main_branch), str(pr_branch_name)
 
-def summarize(content: str, client: AzureOpenAI):
+def summarize(content: str, client: AzureOpenAI) -> str:
     """Uses openAI to summarize"""
     conversation = [
         {
@@ -74,7 +76,7 @@ def summarize(content: str, client: AzureOpenAI):
     output_msg = response_msg.message.content
     return output_msg
 
-def analyze_mood(text: str, client: AzureOpenAI):
+def analyze_mood(text: str, client: AzureOpenAI) -> str:
     # Create a prompt to determine the mood of the input text
     prompt = (
         f"Determine the mood of the following text:\n\n{text}\n\nPlease provide the "
@@ -104,7 +106,37 @@ def analyze_mood(text: str, client: AzureOpenAI):
         print("Error analyzing mood:", e)
         return None
 
-def generate_image(overall_summary: str, context: str, client: AzureOpenAI):
+def write_content_to_file(
+    dir_name: str,
+    file_name_template: str,
+    content: Union[str, bytes]
+) -> str:
+
+    # Set the directory for the stored image
+    dir = os.path.join(os.curdir, dir_name)
+
+    # If the directory doesn't exist, create it
+    if not os.path.isdir(dir):
+        os.mkdir(dir)
+
+    # Initialize the image path (note the filetype should be png)
+    file_path = os.path.join(
+        dir,
+        file_name_template.format(ts=str(time()).replace(".", ""))
+    )
+    file_path = os.path.abspath(file_path)
+
+    if isinstance(content, bytes):
+        write_type = "wb"
+    elif isinstance(content, str):
+        write_type = "w"
+
+    with open(file_path, write_type) as f:
+        f.write(content)
+
+    return file_path
+
+def generate_image(overall_summary: str, context: str, client: AzureOpenAI) -> str:
     # Concatenate summary and context to form a detailed prompt
     prompt = (
         f"There are the following changes to a code base: {overall_summary}. "
@@ -121,43 +153,43 @@ def generate_image(overall_summary: str, context: str, client: AzureOpenAI):
 
         json_response = json.loads(result.model_dump_json())
 
-        # Set the directory for the stored image
-        image_dir = os.path.join(os.curdir, 'images')
-
-        # If the directory doesn't exist, create it
-        if not os.path.isdir(image_dir):
-            os.mkdir(image_dir)
-
-        # Initialize the image path (note the filetype should be png)
-        image_path = os.path.join(image_dir, 'generated_image.png')
-
         # Retrieve the generated image
         image_url = json_response["data"][0]["url"]  # extract image URL from response
         generated_image = requests.get(image_url).content  # download the image
 
-        with open(image_path, "wb") as image_file:
-            image_file.write(generated_image)
+        image_path = write_content_to_file(
+            "images",
+            "generated_image_{ts}.png",
+            generated_image
+        )
 
-        return os.path.abspath(image_path)
+        return image_path
 
     except Exception as e:
         print("Error generating image:", e)
         return None
 
-def main():
+def main() -> None:
     """Main function of the Generator"""
     print(
         "Welcome to Gitty Up (Cara's idea not mine), a helpful tool to generate PR "
         "Comments for your changes."
     )
+
+    results = {}
     repo = input("\nPlease enter the path to your Git Repo: ")
     # repo = "/Users/keith/dev/ag_one/data-platform-integration-tests/"
+
+    results['repo'] = repo
     client = AzureOpenAI(
         azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT"),
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
         api_version="2024-02-01"
     )
-    git_changes = git_stuff(repo=repo)
+    git_changes, destination_branch, source_branch = git_stuff(repo=repo)
+    results["destination_branch"] = destination_branch
+    results["source_branch"] = source_branch
+    results["git_changes"] = git_changes
 
     generate_opinion = [
         summarize(
@@ -170,8 +202,10 @@ def main():
         )
     ]
     formatted_opinion = "\n".join(generate_opinion)
+    results["opinion"] = formatted_opinion
 
     mood = analyze_mood(formatted_opinion, client)
+    results["mood"] = mood
 
     change_summaries = [
         summarize(
@@ -182,11 +216,13 @@ def main():
         )
     ]
     full_list_o_change_summeries = "\n".join(change_summaries)
+    results["full_summary"] = full_list_o_change_summeries
     overall_summary = summarize(
         "Please summarize this list into a concise single sentence summary: "
         f"{full_list_o_change_summeries}",
         client=client
     )
+    results["short_summary"] = overall_summary
     image_types = {
         "Cute Cuddly Animal from the mood": (
             "Please generate a photorealistic image of a cat or other cute cuddly "
@@ -206,6 +242,7 @@ def main():
         f"\n{NL.join([f'   {i + 1} - {v}' for i, v in enumerate(image_types)])}\n"
     )
     image_context = image_types[list(image_types.keys())[int(image_selection) - 1]]
+    results["image_context"] = image_context
 
     print("\nShort Summary of changes:")
     print(indent(overall_summary, "    "))
@@ -218,6 +255,7 @@ def main():
 
     print("\nImage Path:")
     image_path = generate_image(overall_summary, image_context, client)
+    results["image_path"] = image_path
     print(image_path)
 
     clipboard_array = ["## Summary".encode("utf-8")]
@@ -239,5 +277,15 @@ def main():
     clipboard_load_jpg(image_path)
     print("Image copied to clipboard")
 
+    output_file_path = write_content_to_file(
+        "generation_output",
+        "pr_summary_output_{ts}.json",
+        json.dumps(results, indent=4)
+    )
+
+    print(
+        f"\nAll your output has been save to:\n    {output_file_path}"
+        "\n\nPlease come back and see us soon!"
+    )
 if __name__ == "__main__":
     main()
