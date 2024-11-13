@@ -1,7 +1,6 @@
 """List of improvements:
-- pass in repo location
-- repo tab complete
-- save image and generated text for history
+- TODO: pass in repo location
+- TODO: repo tab complete
 """
 import json
 import os
@@ -175,21 +174,50 @@ def main() -> None:
         "Welcome to Gitty Up (Cara's idea not mine), a helpful tool to generate PR "
         "Comments for your changes."
     )
-
     results = {}
-    repo = input("\nPlease enter the path to your Git Repo: ")
-
-    results['repo'] = repo
     client = AzureOpenAI(
         azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT"),
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
         api_version="2024-02-01"
     )
+
+    ####################################################################################
+    # Get git info and changes
+    ####################################################################################
+    repo = input("\nPlease enter the path to your Git Repo: ")
+    results['repo'] = repo
     git_changes, destination_branch, source_branch = git_stuff(repo=repo)
     results["destination_branch"] = destination_branch
     results["source_branch"] = source_branch
     results["git_changes"] = git_changes
 
+    ####################################################################################
+    # Get Change Summaries
+    ####################################################################################
+    change_summaries = [
+        summarize(
+            "You are a code examiner. Please summarize each of the changes in "
+            "this list of changes and make "
+            f"the list of changes very concise:  {NL}{NL.join(git_changes)}",
+            client=client
+        )
+    ]
+    full_list_o_change_summeries = "\n".join(change_summaries)
+    results["full_summary"] = full_list_o_change_summeries
+
+    ####################################################################################
+    # Get Overall Summary of Changes
+    ####################################################################################
+    overall_summary = summarize(
+        "Please summarize this list into a concise single sentence summary: "
+        f"{full_list_o_change_summeries}",
+        client=client
+    )
+    results["short_summary"] = overall_summary
+
+    ####################################################################################
+    # Generate Opinion of Changes
+    ####################################################################################
     generate_opinion = [
         summarize(
             "You are charged with keeping a codebase well maintained. "
@@ -203,25 +231,15 @@ def main() -> None:
     formatted_opinion = "\n".join(generate_opinion)
     results["opinion"] = formatted_opinion
 
+    ####################################################################################
+    # Get the mood of the Opinion
+    ####################################################################################
     mood = analyze_mood(formatted_opinion, client)
     results["mood"] = mood
 
-    change_summaries = [
-        summarize(
-            "You are a code examiner. Please summarize each of the changes in "
-            "this list of changes and make "
-            f"the list of changes very concise:  {NL}{NL.join(git_changes)}",
-            client=client
-        )
-    ]
-    full_list_o_change_summeries = "\n".join(change_summaries)
-    results["full_summary"] = full_list_o_change_summeries
-    overall_summary = summarize(
-        "Please summarize this list into a concise single sentence summary: "
-        f"{full_list_o_change_summeries}",
-        client=client
-    )
-    results["short_summary"] = overall_summary
+    ####################################################################################
+    # Generate the Image
+    ####################################################################################
     image_types = {
         "Cute Cuddly Animal from the mood": (
             "Please generate a photorealistic image of a cat or other cute cuddly "
@@ -243,6 +261,9 @@ def main() -> None:
     image_context = image_types[list(image_types.keys())[int(image_selection) - 1]]
     results["image_context"] = image_context
 
+    ####################################################################################
+    # Output everything
+    ####################################################################################
     print("\nShort Summary of changes:")
     print(indent(overall_summary, "    "))
     print("\nFull list of changes:")
@@ -250,13 +271,16 @@ def main() -> None:
     print("\nBot's Opinion of changes:")
     print(indent(formatted_opinion, "    "))
     print("\nMood of the changes:", mood, sep=NL)
-
-
     print("\nImage Path:")
+
+    # Image actually generates here but that's only so we can multitask
     image_path = generate_image(overall_summary, image_context, client)
     results["image_path"] = image_path
     print(image_path)
 
+    ####################################################################################
+    # Generate clipboard data
+    ####################################################################################
     clipboard_array = ["## Summary".encode("utf-8")]
     clipboard_array.append(overall_summary.encode("utf-8"))
     clipboard_array.append("".encode("utf-8"))
@@ -270,21 +294,25 @@ def main() -> None:
     copy_to_clipboard(NL.encode("utf-8").join(clipboard_array))
     print("\n\nYour Change Summary has been placed in your clipboard.")
 
+    # Pause for people to paste into PR
     input("Press Enter to get image into clipboard.")
 
-    # Put into clipboard
+    # Put image into clipboard
     clipboard_load_jpg(image_path)
     print("Image copied to clipboard")
 
+    ####################################################################################
+    # Write results and finish it up
+    ####################################################################################
     output_file_path = write_content_to_file(
         "generation_output",
         "pr_summary_output_{ts}.json",
         json.dumps(results, indent=4)
     )
-
     print(
         f"\nAll your output has been save to:\n    {output_file_path}"
         "\n\nPlease come back and see us soon!"
     )
+
 if __name__ == "__main__":
     main()
