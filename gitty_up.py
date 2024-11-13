@@ -178,7 +178,6 @@ def main() -> None:
 
     results = {}
     repo = input("\nPlease enter the path to your Git Repo: ")
-    # repo = "/Users/keith/dev/ag_one/data-platform-integration-tests/"
 
     results['repo'] = repo
     client = AzureOpenAI(
