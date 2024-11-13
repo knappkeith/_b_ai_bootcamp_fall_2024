@@ -177,7 +177,7 @@ def main():
     )
 
     # CODE HERE FOR GENERATING IMAGE
-    context = "cute, cats" + mood
+    context = "cute" + mood
     image_path = generate_image(overall_summary, context, client)
 
     print("\nShort Summary of changes:")
@@ -200,7 +200,7 @@ def main():
     clipboard_array.append("## CUTE".encode("utf-8"))
     clipboard_array.append("".encode("utf-8"))
     copy_to_clipboard(NL.encode("utf-8").join(clipboard_array))
-    print("\n\nYour Change Summary and Image has been placed in your clipboard.")
+    print("\n\nYour Change Summary has been placed in your clipboard.")
 
     input("Press Enter to get image into clipboard.")
 
