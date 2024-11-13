@@ -1,2 +1,4 @@
 GitPython
 openai
+requests
+pyjpgclipboard
