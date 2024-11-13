@@ -165,14 +165,16 @@ def main():
     )
     git_changes = git_stuff(repo=repo)
 
-    # change_summaries = [
-    #     summarize(
-    #         "You are a code examiner. Please summarize each of the changes in "
-    #         "this list of changes and only include important changes and make "
-    #         f"the list of changes very concise:  {x}",
-    #         client=client
-    #     ) for x in git_changes
-    # ]
+    generate_opinion = [
+        summarize(
+            "You are charged with keeping a codebase well maintained.  "
+            "Based on the changes in the following list, give your "
+            f"opinion:  {x}",
+            client=client
+        ) for x in git_changes
+    ]
+    formatted_opinion = "\n".join(generate_opinion)
+
     change_summaries = [
         summarize(
             "You are a code examiner. Please summarize each of the changes in "
@@ -189,13 +191,15 @@ def main():
     )
 
     # CODE HERE FOR GENERATING IMAGE
-    context = "cute but angry"
+    context = "cute and helpful"
     image_url = generate_image(overall_summary, context, client)
 
     print("\nShort Summary of changes:")
     print(overall_summary)
     print("\nFull list of changes:")
     print(full_list_o_change_summeries)
+    print("\nBot's Opinion of changes:")
+    print(formatted_opinion)
     print("\nCute Binary:")
     print(image_url)
 
