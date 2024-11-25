@@ -68,7 +68,7 @@ def summarize(content: str, client: AzureOpenAI) -> str:
         },
     ]
     response = client.chat.completions.create(
-        model="gpt-35-turbo",
+        model="gpt-4o",
         messages=conversation
     )
     response_msg = choice(response.choices)
