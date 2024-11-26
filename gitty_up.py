@@ -1,7 +1,3 @@
-"""List of improvements:
-- TODO: pass in repo location
-- TODO: repo tab complete
-"""
 import json
 import os
 import subprocess
@@ -187,7 +183,17 @@ def main() -> None:
     print(f"{'#':#^84}")
     print(f"#{'We need some information from you':^82}#")
     print(f"{'#':#^84}")
-    repo = input("\nPlease enter the path to your Git Repo: ")
+    default_repo = os.environ.get("DEFAULT_GIT_REPO", None)
+    input_msg = (
+        "\nPlease enter the path to your Git Repo: "
+        if default_repo is None
+        else f"\nPlease enter the path to your Git Repo(default: {default_repo}): "
+    )
+    repo = input(input_msg)
+    if repo == "":
+        if default_repo is None:
+            raise RuntimeError("You must enter a path for your repo!")
+        repo = default_repo
     results['repo'] = repo
     git_changes, destination_branch, source_branch = git_stuff(repo=repo)
     results["destination_branch"] = destination_branch

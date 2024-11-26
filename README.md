@@ -21,3 +21,13 @@ To Run you need to set two environment variables
 ````
 $ python gitty_up.py
 ````
+
+## Making it yours
+
+If you want to add a Default Repo to use instead of always asking you can:
+
+```
+  export DEFAULT_GIT_REPO="{path to your favorite repo}"
+```
+
+This will then be the default when you are prompted to enter your repo and you can just hit enter to continue.
