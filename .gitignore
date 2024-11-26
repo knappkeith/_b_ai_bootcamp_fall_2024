@@ -166,3 +166,6 @@ cython_debug/
 
 # Generated Output Folder
 /generation_output
+
+# MacOS
+.DS_Store
